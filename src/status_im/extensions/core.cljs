@@ -20,7 +20,8 @@
             status-im.extensions.ethereum
             [status-im.utils.ethereum.tokens :as tokens]
             [status-im.utils.ethereum.core :as ethereum]
-            [status-im.chat.commands.sending :as commands-sending]))
+            [status-im.chat.commands.sending :as commands-sending]
+            [status-im.ui.components.icons.vector-icons :as icons]))
 
 (re-frame/reg-fx
  ::identity-event
@@ -324,10 +325,14 @@
     (into [react/view o] (map wrap-view-child children))
     (into [react/view {} (wrap-view-child o)] (map wrap-view-child children))))
 
+(defn icon [o]
+  [icons/icon (:key o) o])
+
 (def capacities
   {:components {'view               {:value view}
                 'text               {:value text}
                 'touchable-opacity  {:value touchable-opacity :properties {:on-press :event}}
+                'icon               {:value icon :properties {:key :keyword :color :keyword}}
                 'image              {:value image :properties {:uri :string}}
                 'input              {:value input :properties {:on-change :event :placeholder :string :keyboard-type :keyword}}
                 'button             {:value button :properties {:enabled :boolean :disabled :boolean :on-click :event}}
@@ -352,6 +357,10 @@
                 {:permissions [:read]
                  :value       :alert
                  :arguments   {:value :string}}
+                'show-selection-screen
+                {:permissions [:read]
+                 :value       :show-selection-screen
+                 :arguments   {:items :vector :on-select :event :label :keyword}}
                 'chat.command/set-parameter
                 {:permissions [:read]
                  :value       :extensions.chat.command/set-parameter
@@ -460,7 +469,7 @@
                                :method?    :string
                                :params?    :vector
                                :nonce?     :string
-                               :on-result :event}}
+                               :on-result  :event}}
                 'ethereum/logs
                 {:permissions [:read]
                  :value       :extensions/ethereum-logs
@@ -469,20 +478,20 @@
                                :address?   :vector
                                :topics?    :vector
                                :blockhash? :string
-                               :on-result :event}}
+                               :on-result  :event}}
                 'ethereum/resolve-ens
                 {:permissions [:read]
                  :value       :extensions/ethereum-resolve-ens
-                 :arguments   {:name       :string
+                 :arguments   {:name      :string
                                :on-result :event}}
                 'ethereum/call
                 {:permissions [:read]
                  :value       :extensions/ethereum-call
-                 :arguments   {:to         :string
-                               :method     :string
-                               :params?    :vector
-                               :outputs?   :vector
-                               :on-result  :event}}}
+                 :arguments   {:to        :string
+                               :method    :string
+                               :params?   :vector
+                               :outputs?  :vector
+                               :on-result :event}}}
    :hooks      {:chat.command    commands/command-hook
                 :wallet.settings settings/hook}})
 
