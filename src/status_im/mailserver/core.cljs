@@ -111,8 +111,8 @@
         res))
     (catch :default e
       {:error (.-message e)})))
-
-(defn- response-handler [success-fn error-fn]
+;; TODO (rcullito) think about moving this fn to a different ns
+(defn response-handler [success-fn error-fn]
   (fn handle-response
     ([response]
      (let [{:keys [error result]} (parse-json response)]

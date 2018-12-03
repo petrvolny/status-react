@@ -15,6 +15,9 @@
             [status-im.ui.screens.pairing.views :as pairing.views]
             [status-im.ui.components.qr-code-viewer.views :as qr-code-viewer]
             [status-im.ui.screens.desktop.main.tabs.profile.styles :as styles]
+            [status-im.native-module.core :as status]
+            [status-im.mailserver.core :as mailserver.core]
+            [status-im.constants :as constants]
             [status-im.ui.screens.profile.user.views :as profile]
             [status-im.ui.screens.profile.seed.views :as profile.recovery]
             [status-im.ui.components.common.common :as components.common]))
@@ -98,6 +101,20 @@
       (and peers-connected? mailserver-connected?)       (str "Connected with " peers-count " peers including mailserver.")
       (and peers-disconnected? searching?)               "Disconnected and searching"
       :else                                              "Disconnected")))
+
+(defn bandwidth-metrics []
+  (let [args {:jsonrpc "2.0"
+              :id      2
+              :method  constants/debug-metrics
+              :params  [true]}
+        payload (.stringify js/JSON (clj->js args))]
+    (status/call-private-rpc
+     payload
+     (mailserver.core/response-handler #(log/debug "we got the debug metrics" %)
+                                       #(log/error "we did not get the debug metrics" %)))))
+
+;; (bandwidth-metrics)
+
 
 (views/defview advanced-settings []
   (views/letsubs [installations    [:pairing/installations]
