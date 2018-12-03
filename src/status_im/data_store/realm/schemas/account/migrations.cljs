@@ -4,9 +4,10 @@
             [status-im.chat.models.message-content :as message-content]
             [status-im.transport.utils :as transport.utils]
             [cljs.tools.reader.edn :as edn]
-            [status-im.js-dependencies :as dependencies]
             [clojure.string :as string]
-            [cljs.tools.reader.edn :as edn]))
+            [status-im.constants :as constants]
+            [cognitect.transit :as transit]
+            [status-im.js-dependencies :as dependencies]))
 
 (defn v1 [old-realm new-realm]
   (log/debug "migrating v1 account database: " old-realm new-realm))
@@ -273,3 +274,64 @@
             message-record (map->Message message)
             old-message-id (old-message-id message-record)]
         (aset js-message "old-message-id" old-message-id)))))
+
+;; It's necessary to support old clients understanding only older, verbose command content (`release/0.9.25` and older)
+(defn- new->legacy-command-data [{:keys [command-path params] :as content}]
+  (get {["send" #{:personal-chats}]    [{:command-ref ["transactor" :command 83 "send"]
+                                         :command "send"
+                                         :bot "transactor"
+                                         :command-scope-bitmask 83}
+                                        constants/content-type-command]
+        ["request" #{:personal-chats}] [{:command-ref ["transactor" :command 83 "request"]
+                                         :request-command-ref ["transactor" :command 83 "send"]
+                                         :command "request"
+                                         :request-command "send"
+                                         :bot "transactor"
+                                         :command-scope-bitmask 83
+                                         :prefill [(get params :asset)
+                                                   (get params :amount)]}
+                                        constants/content-type-command-request]}
+       command-path))
+
+(deftype MessageHandler []
+  Object
+  (tag [this v] "c4")
+  (rep [this {:keys [content content-type message-type clock-value timestamp]}]
+    (condp = content-type
+      constants/content-type-text ;; append new content add the end, still pass content the old way at the old index
+      #js [(:text content) content-type message-type clock-value timestamp content]
+      constants/content-type-command ;; handle command compatibility issues
+      (let [[legacy-content legacy-content-type] (new->legacy-command-data content)]
+        #js [(merge content legacy-content) (or legacy-content-type content-type) message-type clock-value timestamp])
+      ;; no need for legacy conversions for rest of the content types
+      #js [content content-type message-type clock-value timestamp])))
+
+(def writer (transit/writer :json
+                            {:handlers
+                             {Message (MessageHandler.)}}))
+
+(defn serialize
+  "Serializes a record implementing the StatusMessage protocol using the custom writers"
+  [o]
+  (transit/write writer o))
+
+(defn payload
+  [message]
+  (transport.utils/from-utf8 (serialize message)))
+
+(defn v28 [old-ream new-realm]
+  (let [messages (.objects new-realm "message")]
+    (dotimes [i (.-length messages)]
+      (let [message        (aget messages i)
+            content        (edn/read-string
+                            (aget message "content"))
+            content-type   (aget message "content-type")
+            message-type   (keyword
+                            (aget message "message-type"))
+            clock-value    (aget message "clock-value")
+            timestamp      (aget message "timestamp")
+            message-record (Message. content content-type message-type
+                                     clock-value timestamp)
+            payload (payload message-record)
+            message-id (transport.utils/message-id {:payload payload})]
+        (aset message "message-id" message-id)))))

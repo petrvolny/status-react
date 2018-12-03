@@ -28,7 +28,8 @@
             [status-im.ui.components.react :as react]
             [status-im.utils.fx :as fx]
             [taoensso.timbre :as log]
-            [status-im.data-store.messages :as messages-store]))
+            [status-im.data-store.messages :as messages-store]
+            [status-im.transport.message.transit :as transit]))
 
 (defn- wrap-group-message
   "Wrap a group message in a membership update"
@@ -315,11 +316,7 @@
   (if (= network-status :offline)
     {:dispatch-later [{:ms       10000
                        :dispatch [:message/update-message-status chat-id message-id :not-sent]}]}
-    (let [wrapped-record (if (= (:message-type send-record) :group-user-message)
-                           (wrap-group-message cofx chat-id send-record)
-                           send-record)]
-
-      (protocol/send wrapped-record chat-id cofx))))
+    (protocol/send send-record chat-id (assoc cofx :message-id message-id))))
 
 (defn add-message-type [message {:keys [chat-id group-chat public?]}]
   (cond-> message
@@ -335,7 +332,11 @@
 (fx/defn upsert-and-send [{:keys [now] :as cofx} {:keys [chat-id] :as message}]
   (let [send-record     (protocol/map->Message (select-keys message transport-keys))
         old-message-id  (transport.utils/old-message-id send-record)
-        message-id      (transport.utils/message-id message)
+        wrapped-record (if (= (:message-type send-record) :group-user-message)
+                         (wrap-group-message cofx chat-id send-record)
+                         send-record)
+        payload         (transport.utils/from-utf8 (transit/serialize wrapped-record))
+        message-id      (transport.utils/message-id {:payload payload})
         message-with-id (assoc message
                                :message-id message-id
                                :old-message-id old-message-id)]
@@ -345,7 +346,7 @@
                                        :timestamp now})
               (add-message false message-with-id true)
               (add-own-status chat-id message-id :sending)
-              (send chat-id message-id send-record))))
+              (send chat-id message-id wrapped-record))))
 
 (fx/defn send-push-notification [cofx fcm-token status]
   (when (and fcm-token (= status :sent))
@@ -371,9 +372,13 @@
         send-record (-> message
                         (select-keys transport-keys)
                         (update :message-type keyword)
-                        protocol/map->Message)]
+                        protocol/map->Message)
+
+        wrapped-record (if (= (:message-type send-record) :group-user-message)
+                         (wrap-group-message cofx chat-id send-record)
+                         send-record)]
     (fx/merge cofx
-              (send chat-id message-id send-record)
+              (send chat-id message-id wrapped-record)
               (update-message-status chat-id message-id :sending))))
 
 (fx/defn remove-message-from-group
