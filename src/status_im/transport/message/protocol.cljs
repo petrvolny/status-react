@@ -16,10 +16,11 @@
   (receive [this chat-id signature timestamp cofx] "Method producing all effects necessary for receiving the message record")
   (validate [this] "Method returning the message if it is valid or nil if it is not"))
 
-(def ^:private whisper-opts
-  {:ttl       10 ;; ttl of 10 sec
-   :powTarget config/pow-target
-   :powTime   config/pow-time})
+(def whisper-opts
+  {:whisper-drift-tolerance 10 ;; time drift that is tolerated by 10 seconds
+   :ttl                     10 ;; ttl of 10 sec
+   :powTarget               config/pow-target
+   :powTime                 config/pow-time})
 
 (fx/defn init-chat
   "Initialises chat on protocol layer.
