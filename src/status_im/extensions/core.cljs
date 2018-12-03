@@ -246,6 +246,15 @@
      (when-let [command (last (first (filter #(= (ffirst %) (name hook-id)) (:id->command db))))]
        (commands-sending/send cofx current-chat-id command params)))))
 
+(handlers/register-handler-fx
+ :extensions/show-selection-screen
+ (fn [cofx [_ _ {:keys [on-select] :as params}]]
+   (navigation/navigate-to-cofx cofx
+                                :selection-modal-screen
+                                (assoc params :on-select #(do
+                                                            (re-frame/dispatch [:navigate-back])
+                                                            (re-frame/dispatch (on-select %)))))))
+
 (defn operation->fn [k]
   (case k
     :plus   +
@@ -359,8 +368,8 @@
                  :arguments   {:value :string}}
                 'show-selection-screen
                 {:permissions [:read]
-                 :value       :show-selection-screen
-                 :arguments   {:items :vector :on-select :event :label :keyword}}
+                 :value       :extensions/show-selection-screen
+                 :arguments   {:items :vector :on-select :event :label? :keyword :title? :string}}
                 'chat.command/set-parameter
                 {:permissions [:read]
                  :value       :extensions.chat.command/set-parameter
